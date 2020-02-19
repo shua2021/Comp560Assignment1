@@ -148,9 +148,9 @@ public class LocalSearch {
     * be less likely to accept a move that would worsen our overall state
      */
     public static ArrayList<stateNode> simulatedAnnealing (ArrayList<stateNode> states) {
-        double Temp = 1;
+        double Temp = .99;
 
-        while(Temp >= 0) {
+        while(Temp >= 0.01) {
             //First selected a random state:
             int random = new Random().nextInt(states.size());
             stateNode randomState = states.get(random);
@@ -202,7 +202,7 @@ public class LocalSearch {
             //Numbers I tried:
             //-.01 ----> No solutions found
             //-.001 ----> No solns
-            Temp -= .000001; //Would give me 1000 searches
+            Temp *= .999;
         }
 
         // toString(states);
@@ -236,11 +236,71 @@ public class LocalSearch {
         return false;
     }
 
+    public static ArrayList<stateNode> simulatedAnnealingNoRestart (ArrayList<stateNode> states) {
+        double Temp = .99;
+
+        long start = System.nanoTime();
+        //End the search if we're looking for more than a minute
+        while(((double) (System.nanoTime() - start) / 1000000000) < 60) {
+            //First selected a random state:
+            int random = new Random().nextInt(states.size());
+            stateNode randomState = states.get(random);
+            //Get the number of conflicts on the current state I am looking at and store the current color in case it is better
+            String currentSelectedColor = randomState.selectedColor;
+            int curConflicts = getNumOfConflicts(randomState);
+
+            //Change the color and see if that resolves any conflicts
+            int randomForColor = new Random().nextInt(randomState.availColors.size());
+            String randomColor = randomState.availColors.get(randomForColor);
+            randomState.selectedColor = randomColor;
+            int newConflicts = getNumOfConflicts(randomState);
+
+            //Compare the number of conflicts for each of the two choices: this gives us our delta E from the book
+            double dE = curConflicts - newConflicts;
+            // System.out.println(Math.exp(dE/Temp));
+            //In this case the new random color selected was a better move and we always accept moves that better the
+            //Problem space
+            if(dE > 0) {
+                //Add the color we started with back to the list of the available colors and get rid of the
+                //color that I chose randomly above
+                randomState.availColors.add(currentSelectedColor);
+                randomState.availColors.remove(randomColor);
+            } else {
+                //Create a random value between 0 and 1, assuming a uniform distribution:
+                //p values should be less than dE/temp and 1-p should be greater than dE/temp
+                double probOfBadMove = Math.exp(dE/Temp);
+                double randomForChecking = Math.random();
+                //I am willing to take the "badness" of the move we generated because it is above
+                //my probability threshold
+                if(randomForChecking > probOfBadMove){
+                    // In this case I will still take the random move and do as I did before to just
+                    // add what I had before to my new possible colors and take away what I now have
+                    //Selected from future choices
+                    randomState.availColors.add(currentSelectedColor);
+                    randomState.availColors.remove(randomColor);
+                } else {
+                    //In this case the move we wanted was too bad and we want to keep our original color
+                    randomState.selectedColor = currentSelectedColor;
+                }
+            }
+
+            if(checkSolution(states)) {
+                timeToFind = (double) (System.nanoTime() - start) / 1000000000;
+                return states;
+            }
+
+            Temp *= .999;
+        }
+
+        toString(states);
+        System.out.println("No solution found");
+        return null;
+    }
+
 
     public static void toString(ArrayList<stateNode> states) {
         for(stateNode s: states) {
-            System.out.println(s.stateLabel + ": " + s.selectedColor + " Remaining colors: " + s.availColors.get(0)+ ", " +
-                    s.availColors.get(1));
+            System.out.println(s.stateLabel + ": " + s.selectedColor);
         }
     }
 
@@ -248,11 +308,15 @@ public class LocalSearch {
         // ArrayList<stateNode> states = readFile("src/Australia.txt");
         ArrayList<stateNode> states = readFile("src/United States.txt");
 
-        if(searchingFunction(states)) {
-            toString(states);
-            System.out.println("Time to find solution: " + timeToFind);
-        }
+//        if(searchingFunction(states)) {
+//            toString(states);
+//            System.out.println("Time to find solution: " + timeToFind);
+//        }
 
-
+         randomColor(states);
+         if(simulatedAnnealingNoRestart(states) != null) {
+             toString(states);
+             System.out.println("Time to find solution: " + timeToFind);
+         }
     }
 }
